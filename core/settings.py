@@ -8,9 +8,9 @@ from pathlib import Path
 
 APP_NAME = "RGV Operations Suite"
 DEFAULTS = {
-    "logo_path": "",
+    "watermark_preset": "RGV",
+    "custom_logo_path": "",
     "output_folder": str(Path.home() / "Videos" / "RGV Exports"),
-    "position": "Bottom Right",
     "opacity": 75,
     "size": 18,
     "margin": 24,
@@ -29,6 +29,9 @@ def load_settings() -> dict:
         saved = json.loads(path.read_text(encoding="utf-8"))
         if isinstance(saved, dict):
             values.update({key: saved[key] for key in DEFAULTS if key in saved})
+            # Preserve a logo selected in an older release as a custom preset.
+            if saved.get("logo_path") and not saved.get("custom_logo_path"):
+                values["custom_logo_path"] = saved["logo_path"]
     except (OSError, ValueError, TypeError):
         pass
     return values

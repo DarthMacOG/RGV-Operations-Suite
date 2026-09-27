@@ -14,7 +14,6 @@ python -m PyInstaller `
     --icon $iconPath `
     --add-data "$assetSource;assets" `
     --collect-all imageio_ffmpeg `
-    --collect-all tzdata `
     --distpath $outputDirectory `
     (Join-Path $projectRoot "app.py")
 

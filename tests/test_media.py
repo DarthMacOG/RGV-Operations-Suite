@@ -12,10 +12,15 @@ from core.media import (
     process_video,
     unique_output_path,
     watermark_coordinates,
+    watermark_position_for,
 )
 
 
 class MediaTests(unittest.TestCase):
+    def test_media_type_selects_fixed_position(self):
+        self.assertEqual(watermark_position_for(Path("photo.jpg")), "Bottom Left")
+        self.assertEqual(watermark_position_for(Path("clip.mp4")), "Top Right")
+
     def test_coordinates(self):
         self.assertEqual(watermark_coordinates((1000, 500), (100, 50), "Bottom Right", 20), (880, 430))
         self.assertEqual(watermark_coordinates((1000, 500), (100, 50), "Top Left", 20), (20, 20))

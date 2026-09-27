@@ -15,6 +15,11 @@ VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv"}
 MEDIA_EXTENSIONS = IMAGE_EXTENSIONS | VIDEO_EXTENSIONS
 
 
+def watermark_position_for(source: Path) -> str:
+    """Return the fixed operator-approved placement for a media file."""
+    return "Bottom Left" if source.suffix.lower() in IMAGE_EXTENSIONS else "Top Right"
+
+
 def collect_media(paths: list[str | Path]) -> list[Path]:
     found: list[Path] = []
     seen: set[str] = set()

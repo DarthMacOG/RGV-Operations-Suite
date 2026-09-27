@@ -21,9 +21,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
-    QSizePolicy,
     QSlider,
-    QTabWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -36,10 +34,10 @@ from core.media import (
     process_image,
     process_video,
     unique_output_path,
+    watermark_position_for,
 )
 from core.settings import APP_NAME, load_settings, save_settings
 from core.resources import resource_path
-from ui.timelapse_planner import TimelapsePlanner
 
 
 BG = "#0b111b"
@@ -224,11 +222,12 @@ class ExportWorker(QThread):
                 ".mp4" if source.suffix.lower() in VIDEO_EXTENSIONS else None,
             )
             try:
+                position = watermark_position_for(source)
                 common = (
                     source,
                     logo,
                     destination,
-                    self.settings["position"],
+                    position,
                     self.settings["size"],
                     self.settings["opacity"],
                     self.settings["margin"],
@@ -250,7 +249,7 @@ class MainWindow(QMainWindow):
         self.settings = load_settings()
         self.files: list[Path] = []
         self.worker: ExportWorker | None = None
-        self.setWindowTitle(f"{APP_NAME} — Version 1.1.1")
+        self.setWindowTitle(f"{APP_NAME} — Version 1.2.1")
         self.setWindowIcon(QIcon(str(resource_path("assets/rgv_logo.png"))))
         self.resize(1100, 740)
         self.setMinimumSize(930, 650)
@@ -282,7 +281,7 @@ class MainWindow(QMainWindow):
             )
         )
         logo.setFixedSize(62, 58)
-        badge = QLabel("VERSION 1.1.1")
+        badge = QLabel("VERSION 1.2.1")
         badge.setStyleSheet(
             f"color: {ACCENT}; background: {PANEL_2}; padding: 8px 12px; "
             "border-radius: 5px; font-size: 9pt; font-weight: 600;"
@@ -293,18 +292,7 @@ class MainWindow(QMainWindow):
         header.addWidget(badge)
         outer.addLayout(header)
 
-        tabs = QTabWidget()
-        tabs.setDocumentMode(True)
-        tabs.setStyleSheet(
-            f"QTabWidget::pane {{ border: none; }} "
-            f"QTabBar::tab {{ background: {PANEL}; color: {MUTED}; padding: 10px 22px; "
-            f"border: 1px solid {BORDER}; border-bottom: none; margin-right: 3px; "
-            "border-top-left-radius: 6px; border-top-right-radius: 6px; }}"
-            f"QTabBar::tab:selected {{ background: {PANEL_2}; color: {TEXT}; }}"
-        )
-        media_page = QWidget()
-        body = QHBoxLayout(media_page)
-        body.setContentsMargins(0, 4, 0, 0)
+        body = QHBoxLayout()
         body.setSpacing(18)
         left = QVBoxLayout()
         left.setSpacing(14)
@@ -342,21 +330,29 @@ class MainWindow(QMainWindow):
         controls.setSpacing(10)
         controls.addWidget(self._section_label("WATERMARK SETTINGS"))
 
-        controls.addWidget(self._field_label("Logo"))
-        logo_row = QHBoxLayout()
-        self.logo_edit = QLineEdit(self.settings["logo_path"])
-        self.logo_edit.setPlaceholderText("Choose your RGV logo…")
+        controls.addWidget(self._field_label("Logo preset"))
+        self.logo_combo = QComboBox()
+        self.logo_combo.addItems(["RGV", "Custom…"])
+        self.logo_combo.setCurrentText(self.settings["watermark_preset"])
+        self.logo_combo.currentTextChanged.connect(self._logo_preset_changed)
+        controls.addWidget(self.logo_combo)
+
+        self.custom_logo_row = QWidget()
+        logo_row = QHBoxLayout(self.custom_logo_row)
+        logo_row.setContentsMargins(0, 0, 0, 0)
+        self.logo_edit = QLineEdit(self.settings["custom_logo_path"])
+        self.logo_edit.setPlaceholderText("Choose a custom logo…")
         logo_button = secondary_button("Browse")
         logo_button.clicked.connect(self._browse_logo)
         logo_row.addWidget(self.logo_edit, 1)
         logo_row.addWidget(logo_button)
-        controls.addLayout(logo_row)
+        controls.addWidget(self.custom_logo_row)
+        self._logo_preset_changed(self.logo_combo.currentText())
 
-        controls.addWidget(self._field_label("Position"))
-        self.position_combo = QComboBox()
-        self.position_combo.addItems(["Bottom Right", "Bottom Left", "Top Right", "Top Left"])
-        self.position_combo.setCurrentText(self.settings["position"])
-        controls.addWidget(self.position_combo)
+        placement = QLabel("Photos: bottom-left  •  Videos: top-right")
+        placement.setWordWrap(True)
+        placement.setStyleSheet(f"color: {MUTED}; font-size: 9pt;")
+        controls.addWidget(placement)
 
         self.opacity_slider, self.opacity_value = self._add_slider(
             controls, "Opacity", 10, 100, int(self.settings["opacity"]), "%"
@@ -390,9 +386,7 @@ class MainWindow(QMainWindow):
         self.export_button.clicked.connect(self._start_export)
         controls.addWidget(self.export_button)
         body.addWidget(panel)
-        tabs.addTab(media_page, "Media Watermarking")
-        tabs.addTab(TimelapsePlanner(), "Timelapse Planner")
-        outer.addWidget(tabs, 1)
+        outer.addLayout(body, 1)
 
         footer = QHBoxLayout()
         self.status_dot = QLabel("●")
@@ -488,6 +482,14 @@ class MainWindow(QMainWindow):
         if path:
             self.logo_edit.setText(path)
 
+    def _logo_preset_changed(self, preset):
+        self.custom_logo_row.setVisible(preset == "Custom…")
+
+    def _selected_logo_path(self):
+        if self.logo_combo.currentText() == "RGV":
+            return str(resource_path("assets/rgv_logo.png"))
+        return self.logo_edit.text().strip()
+
     def _browse_output(self):
         path = QFileDialog.getExistingDirectory(self, "Choose export folder", self.output_edit.text())
         if path:
@@ -495,9 +497,10 @@ class MainWindow(QMainWindow):
 
     def _settings_values(self):
         return {
-            "logo_path": self.logo_edit.text().strip(),
+            "logo_path": self._selected_logo_path(),
+            "watermark_preset": self.logo_combo.currentText(),
+            "custom_logo_path": self.logo_edit.text().strip(),
             "output_folder": self.output_edit.text().strip(),
-            "position": self.position_combo.currentText(),
             "opacity": self.opacity_slider.value(),
             "size": self.size_slider.value(),
             "margin": self.margin_slider.value(),
@@ -506,7 +509,7 @@ class MainWindow(QMainWindow):
     def _start_export(self):
         if self.worker and self.worker.isRunning():
             return
-        logo = Path(self.logo_edit.text().strip())
+        logo = Path(self._selected_logo_path())
         output_text = self.output_edit.text().strip()
         if not self.files:
             QMessageBox.information(self, APP_NAME, "Add at least one photo or video to the export queue.")

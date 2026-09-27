@@ -1,5 +1,5 @@
 Pillow>=10.0,<13
-PySide6>=6.8,<7
+# Pin Qt so packaged Windows builds do not silently pick up a newer binary
+# runtime with incompatible DLL entry points.
+PySide6==6.8.3
 imageio-ffmpeg>=0.6,<1
-tzdata>=2026.1
-tzlocal>=5.3,<6
